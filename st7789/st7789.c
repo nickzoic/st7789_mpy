@@ -170,6 +170,10 @@ STATIC void fast_vline(st7789_ST7789_obj_t *self, uint8_t x, uint8_t y, uint16_t
 STATIC mp_obj_t st7789_ST7789_hard_reset(mp_obj_t self_in) {
     st7789_ST7789_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
+    if (self->reset == (gpio_num_t)-1) {
+        mp_raise_ValueError(MP_ERROR_TEXT("no reset pin configured"));
+    }
+
     CS_LOW();
     RESET_HIGH();
     mp_hal_delay_ms(50);
@@ -383,7 +387,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(st7789_ST7789_blit_buffer_obj, 6, 6, 
 
 STATIC mp_obj_t st7789_ST7789_init(mp_obj_t self_in) {
     st7789_ST7789_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    st7789_ST7789_hard_reset(self_in);
+    if (self->reset != (gpio_num_t)-1) st7789_ST7789_hard_reset(self_in);
+
     st7789_ST7789_soft_reset(self_in);
     write_cmd(self, ST7789_SLPOUT, NULL, 0);
 
@@ -557,13 +562,16 @@ mp_obj_t st7789_ST7789_make_new(const mp_obj_type_t *type,
         mp_raise_ValueError(MP_ERROR_TEXT("Unsupported display. Only 240x240 and 135x240 are supported without xstart and ystart provided"));
     }
 
-    if (args[ARG_reset].u_obj == MP_OBJ_NULL
-        || args[ARG_dc].u_obj == MP_OBJ_NULL) {
-        mp_raise_ValueError(MP_ERROR_TEXT("must specify all of reset/dc pins"));
+    if (args[ARG_dc].u_obj == MP_OBJ_NULL) {
+        mp_raise_ValueError(MP_ERROR_TEXT("must specify dc pin"));
     }
-
-    self->reset = mp_hal_get_pin_obj(args[ARG_reset].u_obj);
     self->dc = mp_hal_get_pin_obj(args[ARG_dc].u_obj);
+
+    if (args[ARG_reset].u_obj == MP_OBJ_NULL) {
+	self->reset = (gpio_num_t)-1;
+    } else {
+        self->reset = mp_hal_get_pin_obj(args[ARG_reset].u_obj);
+    }
 
     if (args[ARG_cs].u_obj != MP_OBJ_NULL) {
         self->cs = mp_hal_get_pin_obj(args[ARG_cs].u_obj);
